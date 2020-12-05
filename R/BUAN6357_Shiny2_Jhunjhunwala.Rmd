@@ -1,0 +1,229 @@
+---
+title: "BUAN6357_Shiny2_Jhunjhunwala"
+author: "Abhishek Jhunjhunwala"
+date: "11/6/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+
+
+
+library(tidyverse)
+library(shiny)
+library(leaflet)
+library(dplyr)
+library(DT)  
+library(heatmaply)
+library(shinyHeatmaply)
+library(ECharts2Shiny)
+library(pheatmap)
+library(lubridate)
+
+data <- read.csv("Crimes_2020.csv")
+
+time <- dmy_hm(data$Date)
+
+data$hour = hour(time)
+
+data$month = months(as.Date(data$Date))
+
+data = data[with(data, order(month)), ]
+
+remove_outliers <- function(x, na.rm = TRUE, ...) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
+  H <- 1.5 * IQR(x, na.rm = na.rm)
+  y <- x
+  y[x < (qnt[1] - H)] <- NA
+  y[x > (qnt[2] + H)] <- NA
+  y
+}
+
+data$Longitude = remove_outliers(data$Longitude)
+
+data$Latitude = remove_outliers(data$Latitude)
+
+
+
+ui <- fluidPage(
+  theme = "style.css",
+  div(style = "padding: 1px 0px; width: '100%'",
+      titlePanel(
+        title = "",
+        windowTitle = "Crimes"
+      )
+  ),
+  navbarPage(
+    
+    # Application title.
+    title = div(span(                                          
+      "Chicago Crime Data",
+      style = "position: relative; top: 50%; transform: translateY(-50%);")),
+    
+    tabPanel(
+      "Crime type and Month",
+      
+      tabsetPanel(
+        
+        type = "tabs",
+        # App title ----
+        titlePanel("Bar Plot"),
+        
+        # Sidebar layout with input and output definitions ----
+        sidebarLayout(
+          
+          # Sidebar panel for inputs ----
+          sidebarPanel(
+            
+            # Input: Slider for the number of bins ----
+            selectInput(inputId = "crimetype",
+                        label = "Select the crime type",
+                        choices = unique(as.character(data$Primary.Type)),
+                        selected = unique(as.character(data$Primary.Type))[1],
+                        multiple = TRUE)),
+          
+          # Main panel for displaying outputs ----
+          mainPanel(
+            
+            # Output: Histogram ----
+            plotOutput("bar", height = 500)
+            
+          )
+        )
+      )
+    ),
+    
+    tabPanel(
+      "Heatmap of Crime type by hour of day",
+      tabsetPanel(
+        type = 'tabs',
+          
+          # Sidebar panel for inputs ----
+          
+        mainPanel(
+          plotOutput("heatmap", height="600px", width="800px"))
+      )),
+    
+    
+    tabPanel("Map of Crimes with date", leafletOutput("bbmap", height= 600, width = 800)),
+    
+    tabPanel(
+      "Crime location and hour of day",
+      
+      tabsetPanel(
+        
+        type = "tabs",
+        # App title ----
+        titlePanel("Bar Plot"),
+        
+        # Sidebar layout with input and output definitions ----
+        sidebarLayout(
+          
+          # Sidebar panel for inputs ----
+          sidebarPanel(
+            
+            # Input: Slider for the number of bins ----
+            selectInput(inputId = "location",
+                        label = "Select the location type",
+                        choices = unique(as.character(data$Location.Description)),
+                        selected = unique(as.character(data$Location.Description))[1],
+                        multiple = TRUE)),
+          
+          # Main panel for displaying outputs ----
+          mainPanel(
+            
+            # Output: Histogram ----
+            plotOutput("bar1", height = 500)
+            
+          )
+        )
+      )
+    )
+    
+  ))
+
+
+
+
+
+
+server <- function(input,output){
+  reactive_data = reactive({
+    selected_crime = input$crimetype
+    return(data[data$Primary.Type==selected_crime,])})
+  
+  output$bar <- renderPlot({
+    our_data <- reactive_data()
+    barplot(table(our_data$month),
+            ylab="Crimes",
+            xlab="Month",
+            las=2,
+            col = "blue"
+    )
+  })
+  
+  
+  
+  output$heatmap <- renderPlot({
+    
+    table(data[,c('hour', 'Primary.Type')]) %>%
+      as.data.frame() %>%
+      ggplot() +
+      aes(x=hour, y=Primary.Type, fill=Freq ) %>%
+      geom_tile()
+  })
+  
+  data <- mutate(data, cntnt=paste0('<strong>Date: </strong>',as.Date(Date))) 
+  
+  
+  output$bbmap <- renderLeaflet({
+    leaflet(data) %>% 
+      setView(lng = -87.7, lat = 41.8, zoom = 11) %>%
+      addCircles(lng = ~Longitude, lat = ~Latitude) %>% 
+      addTiles() %>%
+      addCircleMarkers(data = data, lat =  ~Latitude, lng = ~Longitude, 
+                       radius = 1, popup = ~as.character(cntnt), 
+                       color = ~"#1b9e77",
+                       stroke = FALSE, fillOpacity = 0.8)%>%
+      addEasyButton(easyButton(
+        icon="fa-crosshairs", title="ME",
+        onClick=JS("function(btn, map){ map.locate({setView: true}); }")))
+  })
+  
+  reactive_data1 = reactive({
+    selected_location = input$location
+    return(data[data$Location.Description==selected_location,])})
+  
+  output$bar1 <- renderPlot({
+    our_data <- reactive_data1()
+    barplot(table(our_data$hour),
+            ylab="Crimes",
+            xlab="Hour",
+            las=2,
+            col = "blue"
+    )
+  })
+  
+  
+}
+
+shinyApp(ui=ui, server=server)
+
+
+
+
+
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

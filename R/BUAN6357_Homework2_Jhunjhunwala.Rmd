@@ -1,0 +1,163 @@
+---
+title: "HW2"
+author: "Abhishek Jhunjhunwala"
+date: "9/24/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+
+data = fpp2::wmurders
+
+# Libraries
+library(ggplot2)
+library(dplyr)
+library(forecast)
+
+set.seed(42)
+
+
+plot.ts(data, xlab = 'Year', ylab = 'wmurders')
+
+tsdisplay(arima(data, order = c(0,0,0))$residuals)
+
+tsdisplay(arima(data, order = c(0,1,0))$residuals)
+
+```
+
+We can see that the residual plot of the ARIMA model with p(AR)=0, d(I)=1, q(MA)=0 
+is like white noise and does not show any trend which means we do not need to go beyond
+the first difference. Now, looking at the ACF and PACF plots, I see a major peak at lag 2
+so we can try taking MA = 1.
+Next, we calculate theAIC and BIC values of the model. '''
+
+```{r}
+model1 = arima(data, order = c(0,1,0))
+
+model1_aic = AIC(model1) 
+model1_bic = AIC(model1, k = log(length(data)))
+
+c(model1_aic,model1_bic)
+```
+
+Next, we try the ARIMA model with p(AR)=0, d(I)=1 and q(MA)=1.
+
+```{r}
+model2 = arima(data, order = c(0,1,1))
+
+tsdisplay(arima(data, order = c(0,1,1))$residuals)
+
+c(AIC(model2), AIC(model2, k = log(length(data))))
+```
+
+We can still see a major peak at lag 2 so we can try taking MA = 2.
+
+```{r}
+tsdisplay(arima(data, order = c(0,1,2))$residuals)
+
+model3 = arima(data, order = c(0,1,2))
+
+c(AIC(model3), AIC(model3, k = log(length(data))))
+```
+
+Now, we do not see any major peak. So, this can be our final model.
+
+the lags can also be suggestive of an AR(1) or AR(2) model.
+So, we try with p=1, d=1, q=0
+
+```{r}
+tsdisplay(arima(data, order = c(1,1,0))$residuals)
+
+model4 = arima(data, order = c(1,1,0))
+
+c(AIC(model4), AIC(model4, k = log(length(data))))
+```
+
+We can see a major peak at lag 2. So, we can try with p=2, d=1, q=0
+
+```{r}
+tsdisplay(arima(data, order = c(2,1,0))$residuals)
+
+model5 = arima(data, order = c(2,1,0))
+
+c(AIC(model5), AIC(model5, k = log(length(data))))
+```
+
+Now,we have a model with no major peaks and one of the lowest AIC and BIC values. 
+
+But, according to the question, we will go with moving average model, model3:
+
+```{r}
+model_final = arima(data, order = c(0,1,2))
+
+c(AIC(model_final), AIC(model_final, k = log(length(data))))
+```
+
+
+
+
+Q2. It is common for books and lecture notes on time-series models to omit the 
+intercept term because it does not really add anything of substance to 
+understanding the model form (it is just a shift in location).
+The constant term only has an effect when d=0. So, we should not use a constant
+term in our model.
+
+
+
+Q3.
+
+```{r}
+model_final = arima(data, order = c(0,1,2))
+
+tsdisplay(model_final$residuals)
+```
+
+The model is satsfactory because the residual plot appears likr white noise we 
+do not see any trend in the residual plot.
+
+Q4.
+
+```{r}
+forecast = forecast(object = model_final,h=3)
+
+print(forecast)
+
+plot(forecast)
+```
+
+Q5.
+
+```{r}
+model_auto = auto.arima(data,max.d = 1)
+
+print(model_auto)
+
+tsdisplay(model_auto$residuals)
+```
+
+
+auto.arima() gives a model with p=0, d=1, q=0.
+
+Although the residual plot does not show any trend,
+the ACF and PACF plots show major peaks at lag 2.
+
+Considering these, our model with p=0, d=1, q=2 
+is a better model than the one chosen with auto.arima() 
+
+
+
+
+

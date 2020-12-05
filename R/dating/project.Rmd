@@ -1,0 +1,674 @@
+
+---
+title: "Project - Advance Business Analytics with R"
+author: "Abhishek Jhunjhunwala"
+date: "11/23/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+
+```{r dating, eval=TRUE, echo=FALSE, warning=FALSE}
+
+
+library(fastDummies)
+library(resample)
+library(ggplot2)
+library(stringi)
+library(stringr)
+
+setwd("~/Documents/user_engage")
+
+
+df = read.csv(file = "profiles.csv", na.strings = "")
+
+```
+
+#PROBLEM STATEMENT
+
+Develop strategies or features that can increase the user engagement and traffic on the app.
+
+#DATASET
+
+The Dataset contains information about the profiles of around 60K users on the online dating app – OK Cupid. 
+
+The Dataset contains information entered by the user on the app while creating their profile.
+
+It contains information such as demographics, likes, dislikes, interests and self description of the users. 
+
+#INTRODUCTION
+
+The idea is to develop an algorithm that can show relevant or similar profiles to users based on the profile data entered by them on the app. 
+
+We believe that this can increase the interest level of the users as they see relevant profiles on the app. 
+
+This will help increase the user engagement and traffic on the app. 
+
+#FEATURES
+
+The following information is available for each user in the dataset:
+
+**Body_type** - rather not say, thin, overweight, skinny, average, fit, athletic, jacked.
+
+**Diet** - mostly/strictly; anything, vegetarian, vegan, kosher, halal, other.
+
+**Drinking habit** - very often, often, socially, rarely, desperately, not at all.
+
+**Drug abuse** - never, sometimes, often.
+
+**Education** - graduated from, working on, dropped out of; high school, two-year college, university, masters program, law school, med school, Ph.D program, space camp.
+
+**Height** - inches
+
+**Income** - (US $, -1 means rather not say) -1, 20000, 30000, 40000, 50000, 60000 70000
+
+**Job** - student, art/music/writing, banking/finance, administration, technology, construction, education, entertainment/media, management, hospitality, law, medicine, military.
+
+**Offspring** - has a kid, has kids, doesnt have a kid, doesn't want kids; ,and/,but might want them.
+
+**Orientation** - straight, gay, bisexual.
+
+**Pets** - has dogs, likes dogs, dislikes dogs; and has cats, likes cats, dislikes cats.
+
+**Religion** - agnosticism, atheism, Christianity, Judaism, Catholicism, Islam, Hinduism, Buddhism, Other.  
+
+
+#Data Cleaning and Transformation
+
+The dataset was treated for missing values in the following ways:
+
+The rows or data points that had a lot of missing values (more that half the columns) were dropped.
+
+The columns which had a lot of missing values were dropped. 
+
+The columns with a few missing values were treated using mode if the data was categorical and median if the data was numeric.
+
+
+
+
+```{r dating1, eval=TRUE, echo=FALSE}
+drops <- c('diet','pets','offspring','essay0', 'essay1','essay2', 'essay3', 'essay4', 'essay5', 'essay6', 'essay7','essay8','essay9')
+df = df[ , !(names(df) %in% drops)]
+
+
+
+Mode <- function (x, na.rm) {
+  xtab <- table(x)
+  xmode <- names(which(xtab == max(xtab)))
+  if (length(xmode) > 1) xmode <- ">1 mode"
+  return(xmode)
+}
+
+
+
+for (var in 1:ncol(df)) {
+  if (class(df[,var])=="numeric") {
+    df[is.na(df[,var]),var] <- mean(df[,var], na.rm = TRUE)
+  } else if (class(df[,var]) %in% c("character", "factor")) {
+    df[is.na(df[,var]),var] <- Mode(df[,var], na.rm = TRUE)
+  }
+}
+```
+
+# DUMMY VARIABLES
+
+All categorical variables were converted to dummy variables which resulted in a total of around 500 variables.
+
+Top 35 variables with the most variance were selected out of the 500 variables. 
+
+These 35 variables were used for creating clusters and further models. 
+
+
+
+```{r dating2, eval=TRUE, echo=FALSE}
+cols= c('body_type', 'drinks', 'drugs', 'education', 'ethnicity', 'job',
+       'location', 'orientation', 'religion', 'sex', 'sign', 'smokes',
+       'speaks', 'status')
+
+
+# Make dummy variables of all the selected variables in cols
+df_dummy <- dummy_cols(df, select_columns = cols)
+
+
+
+#data = df_dummy[,which(colVars(df_dummy) >= 0.06)]
+
+
+# Selecting variables with high variance 
+data = df_dummy[,c('body_type_athletic', 'body_type_average', 'body_type_curvy',
+                   'body_type_fit', 'body_type_thin', 'drinks_often', 'drinks_rarely',
+                   'drinks_socially', 'drugs_never',
+                   'education_graduated from college/university',
+                   'education_graduated from masters program',
+                   'education_working on college/university', 'ethnicity_asian',
+                   'ethnicity_white', 'job_artistic / musical / writer',
+                   'job_computer / hardware / software', 'job_other',
+                   'job_sales / marketing / biz dev', 'job_science / tech / engineering',
+                   'job_student', 'location_berkeley, california',
+                   'location_oakland, california', 'location_san francisco, california',
+                   'orientation_gay', 'religion_agnosticism', 'sex_f',
+                   'sign_gemini and it&rsquo;s fun to think about', 'smokes_no',
+                   'speaks_english', 'speaks_english (fluently)', 'status_single')]
+```
+
+#CLUSTERING
+
+We start by finding groups or categories among users that can be used to develop more meaningful strategies for increasing user engagement. 
+
+The idea is to show profiles of users to each other among the same group or category. 
+
+For example, if a user belongs to Group A, he/she will be able to see only the profiles of other users in Group A. 
+
+
+#Unsupervised learning techniques - k-means clustering
+
+The k-means clustering algorithm was used to find groups or categories among users.
+
+The elbow diagram based on the within sum of squares distances was used to decide the number of clusters. 
+
+From the elbow diagram, it is clear that there should be 5 clusters or groups of users.  
+
+
+```{r dating3, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7}
+#Elbow Method for finding the optimal number of clusters
+set.seed(54)
+# Compute and plot wss for k = 2 to k = 15.
+k.max <- 10
+
+wss <- sapply(1:k.max, 
+              function(k){kmeans(data, k, nstart=50,iter.max = 20 )$tot.withinss})
+#wss
+
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+
+
+kmeans = kmeans(data, 5, nstart=50,iter.max = 20 )
+
+data$cluster = kmeans$cluster
+
+```
+
+From the elbow diagram, it is clear that there should be 5 clusters or groups of users.  
+
+#EXPLORATORY DATA ANALYSIS BASED ON CLUSTERS
+
+Trying to read the similarities within users of the same cluster.
+
+And trying to figure out the difference between users of different clusters. 
+
+```{r dating4, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7}
+df_mean = round(aggregate(data, list(data$cluster), mean)*100, 0)
+
+body_type <- c(rep(colnames(df_mean)[2] , 5) , rep(colnames(df_mean)[3] , 5) , 
+               rep(colnames(df_mean)[4] , 5) , rep(colnames(df_mean)[5] , 5), 
+               rep(colnames(df_mean)[6] , 5) )
+groups <- rep(c('Group 1' , 'Group 2' , 'Group 3', 'Group 4', 'Group 5'
+                   ) , 5)
+value <- c(df_mean$body_type_athletic, df_mean$body_type_average, df_mean$body_type_curvy, 
+           df_mean$body_type_fit,df_mean$body_type_thin)
+temp <- data.frame(body_type,groups,value)
+
+ggplot(temp, aes(fill=body_type, y=value, x=groups)) + 
+  geom_bar(position="dodge", stat="identity") +
+  geom_text(aes(label=value), position=position_dodge(width=0.9), vjust=-0.25)
+
+```
+
+We can see that group 1 has 100% fit users. Group 4 has 100% athletic users.
+
+Group 2 and Group 5 do not have any athletic or fit users. 
+
+
+
+```{r dating5, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7}
+alcohol <- c(rep(colnames(df_mean)[7] , 5) ,rep(colnames(df_mean)[8] , 5) , 
+             rep(colnames(df_mean)[9] , 5)  )
+
+groups <- rep(c('Group 1' , 'Group 2' , 'Group 3', 'Group 4', 'Group 5') , 3)
+
+value <- c(df_mean$drinks_often, df_mean$drinks_rarely, 
+           df_mean$drinks_socially)
+
+temp <- data.frame(alcohol,groups,value)
+
+
+ggplot(temp, aes(fill=alcohol, y=value, x=groups)) + 
+  geom_bar(position="dodge", stat="identity") +
+  geom_text(aes(label=value), position=position_dodge(width=0.9), vjust=-0.25)
+
+```
+
+
+Group 2 and Group 5 have no users who drink often or drink rarely. 
+
+Group 3 have no users who drink socially.
+
+
+
+```{r dating6, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7}
+Education <- c(rep(colnames(df_mean)[11] , 5) , rep(colnames(df_mean)[12] , 5) , 
+             rep(colnames(df_mean)[13] , 5)  )
+
+groups <- rep(c('Group 1' , 'Group 2' , 'Group 3', 'Group 4', 'Group 5') , 3)
+
+value <- c(df_mean$`education_graduated from college/university`, df_mean$`education_graduated from masters program`, 
+           df_mean$`education_working on college/university` )
+
+temp <- data.frame(Education,groups,value)
+
+
+ggplot(temp, aes(fill=Education, y=value, x=groups)) + 
+  geom_bar(position="dodge", stat="identity") +
+  geom_text(aes(label=value), position=position_dodge(width=0.9), vjust=-0.25)
+```
+
+
+Group 2 have no users who have graduated from college/university.
+
+Group 5 have 100% users who have graduated from college/university.
+
+
+
+```{r dating7, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7}
+Ethnicity <- c(rep(colnames(df_mean)[14] , 5) , rep(colnames(df_mean)[15] , 5)  )
+
+groups <- rep(c('Group 1' , 'Group 2' , 'Group 3', 'Group 4', 'Group 5') , 2)
+
+value <- c(df_mean$ethnicity_asian, df_mean$ethnicity_white )
+
+temp <- data.frame(Ethnicity,groups,value)
+
+
+ggplot(temp, aes(fill=Ethnicity, y=value, x=groups)) + 
+  geom_bar(position="dodge", stat="identity") +
+  geom_text(aes(label=value), position=position_dodge(width=0.9), vjust=-0.25)
+```
+
+
+We have a pretty even mix of people from the two races with white being around 65% and 
+asian being around 10%. 
+
+
+
+```{r dating8, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7 }
+    Job <- c(rep(colnames(df_mean)[16] , 5) , rep(colnames(df_mean)[17] , 5) ,  
+         rep(colnames(df_mean)[18] , 5) , rep(colnames(df_mean)[19] , 5),
+         rep(colnames(df_mean)[20] , 5) , rep(colnames(df_mean)[21] , 5) 
+         )
+
+groups <- rep(c('Group 1' , 'Group 2' , 'Group 3', 'Group 4', 'Group 5') , 6)
+
+value <- c(df_mean$`job_artistic / musical / writer`, df_mean$`job_computer / hardware / software`,  
+          df_mean$job_other, df_mean$`job_sales / marketing / biz dev`,
+          df_mean$`job_science / tech / engineering`, df_mean$job_student
+          )
+
+temp <- data.frame(Job,groups,value)
+
+
+ggplot(temp, aes(fill=Job, y=value, x=groups)) + 
+  geom_bar(position="dodge", stat="identity") +
+  geom_text(aes(label=value), position=position_dodge(width=0.9), vjust=-0.25)
+```
+
+
+We have a pretty even mix of jobs between the different groups. 
+
+
+
+```{r dating9, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7}
+
+location <- c(rep(colnames(df_mean)[22] , 5) , rep(colnames(df_mean)[23] , 5) ,  
+         rep(colnames(df_mean)[24] , 5) )
+
+groups <- rep(c('Group 1' , 'Group 2' , 'Group 3', 'Group 4', 'Group 5') , 3)
+
+value <- c(df_mean$`location_berkeley, california`, df_mean$`location_oakland, california`,  
+           df_mean$`location_san francisco, california`)
+
+temp <- data.frame(location,groups,value)
+
+
+ggplot(temp, aes(fill=location, y=value, x=groups)) + 
+  geom_bar(position="dodge", stat="identity") +
+  geom_text(aes(label=value), position=position_dodge(width=0.9), vjust=-0.25)
+```
+
+
+We have a pretty even mix of location between the different groups. 
+
+
+#Compatibility score
+
+Compatibility score is a measure of how suitable/similar two people are to each other.
+
+It is calculated using different features available in the dataset like body type, diet, drinks, education, job, ethnicity, etc. 
+
+The text based features are first converted to a number implying the significance or order of
+the users. 
+
+Then, a score is calculated for each feature that is considered. 
+
+Then we calculate the average of all those scores to obtain the final compatibility score.  
+
+The users will then be shown profiles in the decreasing order of the compatibility score 
+with respect to the other users. 
+
+
+#![Flowchart to calculate Compatibility Score]("score")
+
+
+
+
+
+```{r dating11, eval=TRUE, echo=FALSE, warning=FALSE}
+
+age_feature = function(x,y){
+  weight = 0
+  diff = abs(as.integer(x)- as.integer(y))
+  if (diff < 5){
+    weight = 1/as.numeric(diff+1)
+  }
+  return(weight)
+}
+
+
+bodyTypeToNum = function(x){
+  x= tolower(x)
+  if(str_detect(x, "thin|skinny")){
+  num_x= 3 
+}
+else if(str_detect(x,"average|fit")){
+  num_x= 4 
+}
+else if(str_detect(x,"athletic|jacked")){
+  num_x= 5 
+}
+else if(str_detect(x,"overweight|a little extra|curvy|full figured")){
+  num_x= 3 
+}
+else if(str_detect(x,"used up")){
+  num_x= 2 
+}
+else{
+  num_x= 0 
+}
+return(num_x)
+}
+
+
+bodyTypeFeature = function(x,y){
+num_x= bodyTypeToNum(x)
+num_y= bodyTypeToNum(y)
+return(log10(num_x*num_y+1)/log10(26)) #dividing by max to normalize it 
+}
+
+
+dietToNum = function(x){
+  x= tolower(x)
+if(str_detect(x,"vegetarian|vegan")){
+  num_x= 2 
+}
+else if (str_detect(x,"kosher")){
+  num_x= 7
+}
+  
+else if (str_detect(x,"halal")){
+  num_x= 10
+}
+  
+else if (!is.null(x)){
+  num_x= 5 
+}
+  
+else{
+  #no response case 
+  num_x= 0
+}
+  
+return(num_x)    
+}
+
+
+dietFeature = function(x,y){
+  
+  if (x==y){
+    return(1)   
+  }
+  
+  else{
+    num_x= dietToNum(x)
+    num_y= dietToNum(y)
+    
+    if(num_x!=0 & num_y!=0){
+      return(1/as.numeric(abs(num_x-num_y)+1))  
+    } 
+    
+    else {0
+    }}
+  
+}
+
+
+
+drinkToNum = function(x){
+  x= tolower(x)
+if (str_detect(x,"often|desperate|playmate|present")){
+num_x= 1 
+}
+  
+else if(str_detect(x,"social"))
+{
+  num_x= 2 
+}
+else if(str_detect(x,"rare"))
+{ 
+ num_x= 3 
+}
+else if(str_detect(x,"no|never"))
+{
+  num_x= 4 
+}
+else{
+  num_x= 0 
+}
+return(num_x)
+}
+
+
+drinkFeature = function(x,y){
+  
+  if (x==y){
+    return(1)   
+  }
+  
+else{
+  num_x= drinkToNum(x)
+  num_y= drinkToNum(y)
+  
+  if(num_x!=0 & num_y!=0){
+    return(1/as.numeric(abs(num_x-num_y)+1))  
+  } 
+   
+  else {0
+}}
+  
+}
+
+
+
+drugToNum = function(x){
+  x= tolower(x)
+  if (str_detect(x,"often|smiling")){
+    num_x= 1 }
+  else if (str_detect(x,"sometime")){
+    num_x= 2 }
+  else if (str_detect(x,"no|never")){
+    num_x= 3}
+  else
+  {num_x= 0 }
+  return (num_x)}
+
+
+
+drugFeature = function(x,y){
+  if (x==y){
+  return (1) }
+else{
+  num_x= drugToNum(x)
+num_y= drugToNum(y)
+if (num_x!=0 & num_y!=0){
+return(1/as.numeric(abs(num_x-num_y)+1))}
+  else 
+  {return(0)}}}
+
+
+educationToNum = function(x){
+  x= tolower(x)
+if (str_detect(x,"space|high school")){
+  num_x= 1 }
+else if (str_detect(x,"college")){
+  num_x= 2 }
+else if (str_detect(x,"univ|master")){
+  num_x= 3}
+else if (str_detect(x,"law|med|ph")){
+  num_x= 4 }
+else{
+  num_x= 0 }
+return(num_x)}
+
+
+educationFeature = function(x,y){
+  #premise: similar educational qualification people should prefer each other 
+  if(x==y){
+  return (1) }
+else{
+num_x= educationToNum(x)
+num_y= educationToNum(y)
+if (num_x!=0 & num_y!=0){ 
+return (1/as.numeric(abs(num_x-num_y)+1)) }
+else {return(0)}
+}}
+
+
+
+smokeFeature = function(x,y){
+  if (x==y){
+  return (1) }
+else{
+  num_x= smokeToNum(x)
+num_y= smokeToNum(y)
+if (num_x!=0 & num_y!=0) 
+return (1/as.numeric(abs(num_x-num_y)+1)) 
+else {return(0)}
+}}
+
+
+smokeToNum = function(x){
+  x= tolower(x)
+if (str_detect(x,"yes")){
+  num_x= 1 }
+else if (str_detect(x,"sometime|drinking|trying to quit")){
+  num_x= 2 }
+else if (str_detect(x,"no|never")){
+  num_x= 3}
+else{
+  num_x= 0 }
+return(num_x)}
+
+
+religionFeature = function(x,y){
+  if (x == y){
+  weight = 1}
+else if (x != 'atheism' & y != 'atheism'){
+  weight = 0.5}
+else if ((x == 'atheism' & y != 'atheism') | (y == 'atheism' & x != 'atheism')){
+  weight = 1/10}
+else{
+  weight = 0}
+return (weight)}
+
+
+ageFeature = function(x,y){
+  weight = 0
+diff = abs(as.integer(x)- as.integer(y))
+if (diff < 5){
+  weight = 1/as.numeric(diff+1)}
+return (weight)}
+
+
+setwd("~/Documents/user_engage")
+
+df = read.csv(file = "profiles.csv", na.strings = "")
+
+
+for (var in 1:ncol(df)) {
+  if (class(df[,var])=="numeric") {
+    df[is.na(df[,var]),var] <- mean(df[,var], na.rm = TRUE)
+  } else if (class(df[,var]) %in% c("character", "factor")) {
+    df[is.na(df[,var]),var] <- Mode(df[,var], na.rm = TRUE)
+  }
+}
+
+
+
+compatibilityScoreCompute = function(UserX,UserY){
+  featureXY= vector() 
+featureXY[0]= educationFeature(df[UserX,]$education, df[UserY,]$education)
+featureXY[1]= religionFeature(df[UserX,]$religion,df[UserY,]$religion)
+featureXY[2]= bodyTypeFeature(df[UserX,]$body_type,df[UserY,]$body_type)
+featureXY[3]= dietFeature(df[UserX,]$diet,df[UserY,]$diet)
+featureXY[4]= ageFeature(df[UserX,]$age,df[UserY,]$age)
+featureXY[5]= smokeFeature(df[UserX,]$smokes,df[UserY,]$smokes)
+featureXY[6]= drinkFeature(df[UserX,]$drinks,df[UserY,]$drinks)
+
+
+score= sum(featureXY)/ as.numeric(length(featureXY))
+return (score)
+}
+
+
+
+compatibility = function(user,n){
+  high_score = 0 
+score_list = array(dim=c(4000,2))
+for (i in 1:4000){
+  if (i!= user){
+  score = compatibilityScoreCompute(user, i)
+score_list[i,1] =  i
+score_list[i,2] =  score
+if (score > high_score){
+  high_score = score}}}
+
+score_df = as.data.frame(x = score_list )
+colnames(score_df) = c('user_id', 'score')
+top_users = score_df[with(score_df, order(-score)),][1:n,]$user_id
+return (top_users)
+
+}
+
+```
+
+
+
+#Example
+
+Calculating and displaying the top 100 recommendation for a randomly selected 
+user (user id - 8) based on the compatibility score. 
+
+
+
+```{r dating12, eval=TRUE, echo=FALSE}
+
+print(compatibility(8,100)) 
+
+```
+
+
+

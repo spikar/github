@@ -1,0 +1,208 @@
+---
+title: "HW1"
+author: "Abhishek Jhunjhunwala"
+date: "9/11/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+
+
+library(caret)
+library(e1071)
+
+data = read.csv('juice.csv')
+
+train_index = createDataPartition(y=data$Purchase, p=0.8, list = FALSE)
+
+length(train_index)
+
+data_train = data[train_index,]
+
+data_test = data[-train_index,]
+
+model = svm(Purchase ~ ., data = data_train, kernel = "linear", cost = 0.01 )
+
+summary(model)
+
+
+y_actual<-data_train$Purchase
+
+y_pred <- predict(model, data_train)
+
+train_error = mean(y_actual!=y_pred) 
+
+print(train_error)
+
+
+
+table(y_actual,y_pred)
+
+
+
+
+y_actual<-data_test$Purchase
+
+y_pred <- predict(model, data_test)
+
+test_error = mean(y_actual!=y_pred) 
+
+print(test_error)
+
+
+
+obj = tune.svm(Purchase ~ ., data = data_train, kernel = "linear", cost = 10^(-2:1) )
+
+summary(obj)
+
+
+
+model = svm(Purchase ~ ., data = data_train, kernel = "linear", cost = 0.1 )
+
+
+y_train<-data_train$Purchase
+
+y_pred <- predict(model, data_train)
+
+train_error = mean(y_train!=y_pred) 
+
+print(train_error)
+
+
+
+y_test<-data_test$Purchase
+
+y_pred <- predict(model, data_test)
+
+test_error = mean(y_test!=y_pred) 
+
+print(test_error)
+
+
+
+
+
+model = svm(Purchase ~ ., data = data_train, kernel = "radial", cost = 0.01 )
+
+summary(model)
+
+
+y_train<-data_train$Purchase
+
+y_pred <- predict(model, data_train)
+
+train_error = mean(y_train!=y_pred) 
+
+print(train_error)
+
+
+table(y_train,y_pred)
+
+
+
+
+y_test<-data_test$Purchase
+
+y_pred <- predict(model, data_test)
+
+test_error = mean(y_test!=y_pred) 
+
+print(test_error)
+
+
+obj = tune.svm(Purchase ~ ., data = data_train, kernel = "radial", cost = 10^(-2:1) )
+
+summary(obj)
+
+
+
+model = svm(Purchase ~ ., data = data_train, kernel = "radial", cost = 1 )
+
+
+y_train<-data_train$Purchase
+
+y_pred <- predict(model, data_train)
+
+train_error = mean(y_train!=y_pred) 
+
+print(train_error)
+
+
+
+
+y_test<-data_test$Purchase
+
+y_pred <- predict(model, data_test)
+
+test_error = mean(y_test!=y_pred) 
+
+print(test_error)
+
+
+
+
+
+
+model = svm(Purchase ~ ., data = data_train, kernel = "polynomial", degree = 2, cost = 0.01 )
+
+summary(model)
+
+
+y_train<-data_train$Purchase
+
+y_pred <- predict(model, data_train)
+
+train_error = mean(y_train!=y_pred) 
+
+print(train_error)
+
+
+table(y_train,y_pred)
+
+
+
+
+y_test<-data_test$Purchase
+
+y_pred <- predict(model, data_test)
+
+test_error = mean(y_test!=y_pred) 
+
+print(test_error)
+
+
+
+obj = tune.svm(Purchase ~ ., data = data_train, kernel = "polynomial", degree = 2, cost = 10^(-2:1) )
+
+summary(obj)
+
+
+
+model = svm(Purchase ~ ., data = data_train, kernel = "polynomial", degree = 2, cost = 10 )
+
+
+y_train<-data_train$Purchase
+
+y_pred <- predict(model, data_train)
+
+train_error = mean(y_train!=y_pred) 
+
+print(train_error)
+
+
+
+
+y_test<-data_test$Purchase
+
+y_pred <- predict(model, data_test)
+
+test_error = mean(y_test!=y_pred) 
+
+print(test_error)
+
+
+
+```
+
